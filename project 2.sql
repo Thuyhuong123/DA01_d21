@@ -56,5 +56,24 @@ on a.id=b.product_id
 where format_date('%Y-%m-%d', b.created_at) between '2022-01-15' and '2022-04-15'
 group by category, dates
 order by category, dates
-
-
+--vw_ecommerce_analyst--
+with cte as (
+  select FORMAT_DATE('%Y-%m', a.created_at) as month,
+  FORMAT_DATE('%Y', a.created_at) as year,
+  b.category as product_category,
+  sum(b.cost) as total_cost,
+  sum(c.sale_price) as TPV, count(c.order_id) as TPO
+  FROM bigquery-public-data.thelook_ecommerce.orders AS a
+  JOIN bigquery-public-data.thelook_ecommerce.order_items as c
+  ON a.order_id=c.order_id
+  JOIN bigquery-public-data.thelook_ecommerce.products AS b
+  ON c.product_id=b.id
+  group by month, year, product_category
+  )
+select month, year, product_category,TPV,TPO,lag(TPV) over (partition by product_category order by month) as pre_rev,
+ CONCAT(ROUND((TPV - LAG(TPV) OVER (PARTITION BY product_category ORDER BY month)) / LAG(TPV) OVER (PARTITION BY product_category ORDER BY month) * 100, 2),'%') as revenue_growth,
+CONCAT(ROUND((TPO - LAG(TPO) OVER (PARTITION BY product_category ORDER BY month)) / LAG(TPO) OVER (PARTITION BY product_category ORDER BY month) * 100, 2), '%') as order_growth,
+total_cost,
+TPV-total_cost as total_profit,
+TPV/total_cost as Profit_to_cost_ratio
+from cte
