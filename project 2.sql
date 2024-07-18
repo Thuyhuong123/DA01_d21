@@ -77,3 +77,37 @@ total_cost,
 TPV-total_cost as total_profit,
 TPV/total_cost as Profit_to_cost_ratio
 from cte
+--retention cohort--
+with order_index as 
+(select user_id, format_date('%Y-%m',first_purchase_date) as cohort_date, created_at,
+(extract (year from created_at )- extract (year from first_purchase_date))*12
++ (extract (month from created_at )- extract (month from first_purchase_date)) +1 as index
+from (
+select user_id, 
+min (created_at) over (partition by user_id) as first_purchase_date,
+created_at
+from bigquery-public-data.thelook_ecommerce.orders)),
+xxx as (
+select cohort_date, index, 
+count(distinct user_id) as cnt
+from order_index
+where index between 1 and 4
+group by cohort_date, index),
+customer_cohort as(
+select 
+cohort_date,
+sum(case when index=1 then cnt else 0 end) as m1,
+sum(case when index=2 then cnt else 0 end) as m2,
+sum(case when index=3 then cnt else 0 end) as m3,
+sum(case when index=4 then cnt else 0 end) as m4
+from xxx
+group by cohort_date
+order by cohort_date)
+select 
+cohort_date,
+round(100.00* m1/m1,2) || '%' as m1,
+round(100*m2/m1,2) || '%'  as m2,
+round (100*m3/m1,2) || '%' as m3 ,
+round (100*m4/m1,2 )|| '%' as m4
+from customer_cohort
+
